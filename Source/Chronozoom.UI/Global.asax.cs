@@ -1,18 +1,22 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
+﻿using Chronozoom.Entities;
+using Microsoft.IdentityModel.Claims;
 using Microsoft.IdentityModel.Web;
+using OuterCurve;
+using SharpBrake;
+using System;
+using System.Collections.Generic;
 using System.Configuration;
+using System.Diagnostics;
+using System.Linq;
+using System.Security.Principal;
 using System.ServiceModel.Activation;
+using System.Threading;
 using System.Web;
 using System.Web.Compilation;
 using System.Web.Mvc;
 using System.Web.Optimization;
 using System.Web.Routing;
 using System.Web.UI;
-using Chronozoom.Entities;
-using OuterCurve;
-using SharpBrake;
 
 namespace Chronozoom.UI
 {
@@ -102,13 +106,76 @@ namespace Chronozoom.UI
                     Trace.TraceInformation("New Install - Populating Initial Db Content");
                     using (Utils.PopulateDbFromJSON populator = new Utils.PopulateDbFromJSON())
                     {
-                        populator.ImportCollection("ChronoZoom", "Cosmos",        "cz.cosmos.json",       true,  true, true);
+                        populator.ImportCollection("ChronoZoom", "Cosmos", "cz.cosmos.json", true, true, true);
                         populator.ImportCollection("ChronoZoom", "AIDS Timeline", "cz.aidstimeline.json", false, true, true);
                     }
                 }
             }
 
             Trace.TraceInformation("Application Starting");
+        }
+
+        protected void Application_PostAuthenticateRequest(object sender, EventArgs e)
+        {
+            if (!string.Equals(ConfigurationManager.AppSettings["DevAuth"], "true", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            var ctx = HttpContext.Current;
+            if (ctx?.User?.Identity != null && ctx.User.Identity.IsAuthenticated)
+                return;
+
+            const string devNameId = "dev@local.test";
+            const string devIdp = "DEV";
+
+            var claims = new List<Microsoft.IdentityModel.Claims.Claim>
+    {
+        new Microsoft.IdentityModel.Claims.Claim(Microsoft.IdentityModel.Claims.ClaimTypes.NameIdentifier, devNameId),
+        new Microsoft.IdentityModel.Claims.Claim("http://schemas.microsoft.com/accesscontrolservice/2010/07/claims/identityprovider", devIdp),
+        new Microsoft.IdentityModel.Claims.Claim(Microsoft.IdentityModel.Claims.ClaimTypes.Name, "Dev")
+    };
+
+            var wifIdentity = new Microsoft.IdentityModel.Claims.ClaimsIdentity(claims, "DEV");
+
+            System.Security.Principal.IPrincipal wifPrincipal =
+                new Microsoft.IdentityModel.Claims.ClaimsPrincipal(
+                    new Microsoft.IdentityModel.Claims.IClaimsIdentity[] { wifIdentity }
+                );
+
+            ctx.User = wifPrincipal;
+            System.Threading.Thread.CurrentPrincipal = wifPrincipal;
+
+            var threadUser = System.Threading.Thread.CurrentPrincipal;
+            var identity = ctx?.User?.Identity;
+
+            Debug.WriteLine("\n==================================================");
+            Debug.WriteLine("               AUTHENTIFIZIERUNGS CHECK            ");
+            Debug.WriteLine("==================================================");
+
+            Debug.WriteLine("HTTP Context vorhanden: " + (ctx != null));
+            Debug.WriteLine("Thread Principal gesetzt: " + (threadUser != null));
+            Debug.WriteLine("User Identity vorhanden: " + (identity != null));
+
+            Debug.WriteLine("IsAuthenticated (HTTP): " + ctx?.User?.Identity?.IsAuthenticated);
+            Debug.WriteLine("AuthType: " + ctx?.User?.Identity?.AuthenticationType);
+            Debug.WriteLine("Identity Typ: " + identity?.GetType().FullName);
+
+            if (identity is Microsoft.IdentityModel.Claims.ClaimsIdentity wifId)
+            {
+                Debug.WriteLine("\n--- WIF ClaimsIdentity erkannt ---");
+                Debug.WriteLine("WIF IsAuthenticated: " + wifId.IsAuthenticated);
+                Debug.WriteLine("Anzahl Claims: " + wifId.Claims.Count());
+
+                foreach (var claim in wifId.Claims)
+                {
+                    Debug.WriteLine("Claim: " + claim.ClaimType + " = " + claim.Value);
+                }
+            }
+            else
+            {
+                Debug.WriteLine("\n⚠ Achtung: Keine WIF ClaimsIdentity aktiv!");
+            }
+
+            Debug.WriteLine("\n==================================================\n");
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]

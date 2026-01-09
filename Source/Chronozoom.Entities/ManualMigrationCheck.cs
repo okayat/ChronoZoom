@@ -47,9 +47,20 @@ namespace Chronozoom.Entities
             // connect to db using connection string from parent app
             using (SqlConnection cn = new SqlConnection(_cnConfig.ToString()))
             {
-
+                Debug.WriteLine("\n\n" +
+                "############################################################\n" +
+                "STORAGE CONNECTION STRING → " + _cnConfig.ConnectionString + "\n" +
+                "############################################################\n\n");
                 // at least an empty db needs to pre-exist but a schema is not required
                 cn.Open();
+
+                Debug.WriteLine("\n\n" +
+                    "################ MIGRATION CHECK ################\n" +
+                    "DB Name: " + cn.Database + "\n" +
+                    "ConnectionString: " + _cnConfig.ConnectionString + "\n" +
+                    "NewInstall erkannt: " + NewInstall + "\n" +
+                    "Rename nötig: " + rename + "\n" +
+                    "###############################################\n\n");
 
                 // check if schema exists - if so there should always be a migration history table
                 _sql =
@@ -83,6 +94,8 @@ namespace Chronozoom.Entities
                 {
                     // create main schema
                     _sql = Properties.Resources.CreateEntireSchema;
+                    Debug.WriteLine("About to execute SQL length=" + _sql.Length);
+
                     if (_cnConfig.ProviderName.Equals("System.Data.?SqlClient"))        // should never be true - lifted logic as-is from "broken" migration
                     {                                                                   // so exactly matches latest db structure that theoretically should
                         _sql += Properties.Resources._201306050753190_ProgressiveLoad;  // not have the sprocs that ProgressiveLoad introduces.

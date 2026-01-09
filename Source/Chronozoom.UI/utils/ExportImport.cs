@@ -55,16 +55,27 @@ namespace Chronozoom.UI.Utils
         {
             try // may not have a context if class instantiated during start-up for initial db seeding
             {
-                Microsoft.IdentityModel.Claims.ClaimsIdentity claimsIdentity = HttpContext.Current.User.Identity as Microsoft.IdentityModel.Claims.ClaimsIdentity;
-                if (claimsIdentity          == null || !claimsIdentity.IsAuthenticated) { return null; }
+                {
+                    // ✅ Kein HttpContext beim Application_Start / Seeding
+                    if (HttpContext.Current?.User?.Identity == null)
+                        return null;
 
-                Microsoft.IdentityModel.Claims.Claim nameIdentifierClaim = claimsIdentity.Claims.Where(candidate => candidate.ClaimType.EndsWith("nameidentifier", StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
-                if (nameIdentifierClaim     == null)                                    { return null; }
+                    var claimsIdentity = HttpContext.Current.User.Identity as Microsoft.IdentityModel.Claims.ClaimsIdentity;
+                    if (claimsIdentity == null || !claimsIdentity.IsAuthenticated)
+                        return null;
 
-                Microsoft.IdentityModel.Claims.Claim identityProviderClaim = claimsIdentity.Claims.Where(candidate => candidate.ClaimType.EndsWith("identityprovider", StringComparison.OrdinalIgnoreCase)).FirstOrDefault();
-                if (identityProviderClaim   == null)                                    { return null; }
+                    var nameIdentifierClaim = claimsIdentity.Claims
+                        .FirstOrDefault(c => c.ClaimType.EndsWith("nameidentifier", StringComparison.OrdinalIgnoreCase));
+                    if (nameIdentifierClaim == null)
+                        return null;
 
-                return _storage.Users.Where(u => u.NameIdentifier == nameIdentifierClaim.Value).FirstOrDefault();
+                    var identityProviderClaim = claimsIdentity.Claims
+                        .FirstOrDefault(c => c.ClaimType.EndsWith("identityprovider", StringComparison.OrdinalIgnoreCase));
+                    if (identityProviderClaim == null)
+                        return null;
+
+                    return _storage.Users.FirstOrDefault(u => u.NameIdentifier == nameIdentifierClaim.Value);
+                }
             }
             catch
             {
